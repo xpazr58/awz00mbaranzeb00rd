@@ -1,21 +1,18 @@
-# Gr8W8Upd8M8
+# awz00mbaranzeb00rd
+### Very basic fork to make gr8w8upd8m8 compatible with current Python and modules.
 
-[![Code Shelter](https://www.codeshelter.co/static/badges/badge-flat.svg)](https://www.codeshelter.co/)
+## A Wii balance board API
 
-
-## A Wii balance board weight reporter
-
-This script is based on [wiiboard-simple](https://code.google.com/p/wiiboard-simple/), with some dependencies (like
-pygame) removed. I'm pretty sure it only works on Linux.
+This is based off [gr8w8upd8m8](https://github.com/skorokithakis/gr8w8upd8m8/) and it is made to support Python3, for people who are going to work with a Balance Board, just like me.
 
 ## Requirements
 
 To run `gr8w8upd8m8`, you need:
-* Linux.
-* The `bluez-utils` package (you might need to install also `python-bluez`).
+* Linux (or Windows if you are willing to compile the bluetooth module)
+* `pybluez` module
 * Bluetooth.
 
-## Pairing the board
+## Pairing the board (permamently)
 
 Thanks to Ryan Myers for the following:
 
@@ -27,34 +24,29 @@ incompatible ways.
 
 You can run it with:
 
-    ./gr8w8upd8m8.py
+    python3 gr8w8upd8m8.py
 
 It will prompt you to put the board in sync mode and it will search for and connect to it.
 
 If you already know the address, you can just specify it:
 
-    ./gr8w8upd8m8.py <board address>
+    python3 gr8w8upd8m8.py [00:11:22:33:44:AB]
 
 That will skip the discovery process, and connect directly.
 
-`gr8w8upd8m8` uses the `bluez-test-device` utility of `bluez-utils` to disconnect the board at the end, which causes
-the board to shut off. Pairing it with the OS will allow you to use the front button to reconnect to it and run the
-script.
+`awz00mbaranzeb00rd` uses the `bluez-test-device` utility of `bluez-utils` to disconnect the board at the end, which causes
+the board to shut off. 
+
+Pairing it with the OS will allow you to use the front button to reconnect to it and run the
+script. (Which this _might_ work for you, it did *not* work for me)
 
 Calculating the final weight is done by calculating the mode of all the event data, rounded to one decimal digit.
 
-Feel free to use processor.weight to do whatever you want with the calculated weight (I send it to a server for
-further pointless processing).
-
-## License
-
-This software is made available under the [Lesser GPL license](http://www.gnu.org/licenses/lgpl.html).
+Feel free to use processor.weight to do whatever you want with the calculated weight
 
 ## Credits
 
-This project is a mix of various scripts and samples. Thanks go to:
+Thanks go to:
 
-* [wiiboard-simple](https://code.google.com/p/wiiboard-simple/), for providing the base script.
-* [Ryan Myers](https://github.com/Ryan-Myers/), for his [Wiiboard-Net](https://github.com/Ryan-Myers/Wiiboard-Net)
-project and for telling me about `xwiibind.sh.`
-* [xwiimote](https://github.com/dvdhrm/xwiimote) for the xwiibind.sh script itself.
+* [gr8w8upd8m8](https://github.com/skorokithakis/gr8w8upd8m8/), for providing the base script.
+

@@ -5,21 +5,25 @@ import time
 import bluetooth
 import sys
 import subprocess
+import binascii
 
-CONTINUOUS_REPORTING = "04"  # Easier as string with leading zero
+CONTINUOUS_REPORTING = b"\x04"  # Easier as string with leading zero
 
-COMMAND_LIGHT = 11
-COMMAND_REPORTING = 12
-COMMAND_REQUEST_STATUS = 15
-COMMAND_REGISTER = 16
-COMMAND_READ_REGISTER = 17
+COMMAND_LIGHT = b"\x11"
+COMMAND_REPORTING = b"\x12"
+COMMAND_REQUEST_STATUS = b"\x15"
+COMMAND_REGISTER = b"\x16"
+COMMAND_READ_REGISTER = b"\x17"
 
 #input is Wii device to host
-INPUT_STATUS = 20
-INPUT_READ_DATA = 21
+INPUT_STATUS = b"\x20"
+INPUT_READ_DATA = b"\x21"
 
-EXTENSION_8BYTES = 32
+EXTENSION_8BYTES = b"\x32"
 #end "hex" values
+# [!]
+# Refer to line 237 - 241
+# [!]
 
 BUTTON_DOWN_MASK = 8
 
@@ -27,6 +31,7 @@ TOP_RIGHT = 0
 BOTTOM_RIGHT = 1
 TOP_LEFT = 2
 BOTTOM_LEFT = 3
+
 
 BLUETOOTH_NAME = "Nintendo RVL-WBC-01"
 
@@ -108,8 +113,7 @@ class Wiiboard:
 			self.status = "Connected"
 			self.address = address
 			self.calibrate()
-			useExt = ["00", COMMAND_REGISTER, "04", "A4", "00", "40", "00"]
-			self.send(useExt)
+			self.send(COMMAND_REGISTER, b"\x04\xA4\x00\x40\x00")
 			self.setReportingType()
 			print("Wiiboard connected")
 		else:
@@ -120,18 +124,18 @@ class Wiiboard:
 		#   self.receivesocket.settimeout(0.1)       #not for windows?
 		while self.status == "Connected" and not self.processor.done:
 			data = self.receivesocket.recv(25)
-			intype = int(data[1][2:])
-			if intype == INPUT_STATUS:
+			intype = hex(int(data[1]))
+			if intype == "0x20":
 				# TODO: Status input received. It just tells us battery life really
 				self.setReportingType()
-			elif intype == INPUT_READ_DATA:
+			elif intype == "0x21":
 				if self.calibrationRequested:
-					packetLength = (int(str(data[4]).hex(), 16) / 16 + 1)
-					self.parseCalibrationResponse(data[7:len(data)-(7 + packetLength)])
+					packetLength = int(hex(int(data[4])), 16) / 16 + 1
+					self.parseCalibrationResponse(data)
 
 					if packetLength < 16:
 						self.calibrationRequested = False
-			elif intype == EXTENSION_8BYTES:
+			elif intype == "0x32":
 				self.processor.mass(self.createBoardEvent(data[2:12]))
 			else:
 				print("ACK to data write received")
@@ -156,9 +160,9 @@ class Wiiboard:
 
 	# Try to discover a Wiiboard
 	def discover(self):
-		print("Press the red sync button on the board now")
+		print("Press the red (or black) sync button on the board !!")
 		address = None
-		bluetoothdevices = bluetooth.discover_devices(duration=6, lookup_names=True)
+		bluetoothdevices = bluetooth.discover_devices(duration=3, lookup_names=True)
 		for bluetoothdevice in bluetoothdevices:
 			if bluetoothdevice[1] == BLUETOOTH_NAME:
 				address = bluetoothdevice[0]
@@ -168,12 +172,12 @@ class Wiiboard:
 		return address
 
 	def createBoardEvent(self, byte):
-		buttonBytes = byte[1]
+		buttonBytes = byte[0:2]
 		byte = byte[2:len(byte)-12]
 		buttonPressed = False
 		buttonReleased = False
 
-		state = (int(str(buttonBytes[0]).hex(), 16) << 8) | int(str(buttonBytes[1]).hex(), 16)
+		state = (int(str(buttonBytes[0]), 16) << 8) | int(str(buttonBytes[1]), 16)
 		if state == BUTTON_DOWN_MASK:
 			buttonPressed = True
 			if not self.buttonDown:
@@ -186,10 +190,10 @@ class Wiiboard:
 				self.buttonDown = False
 				print("Button released")
 
-		rawTR = (int(byte[0].hex(), 16) << 8) + int(byte[1].hex(), 16)
-		rawBR = (int(byte[2].hex(), 16) << 8) + int(byte[3].hex(), 16)
-		rawTL = (int(byte[4].hex(), 16) << 8) + int(byte[5].hex(), 16)
-		rawBL = (int(byte[6].hex(), 16) << 8) + int(byte[7].hex(), 16)
+		rawTR = (int(str(byte[0]), 16) << 8)
+		rawBR = (int(str(byte[1]), 16) << 8)
+		rawTL = (int(str(byte[2]), 16) << 8)
+		rawBL = (int(str(byte[3]), 16) << 8)
 
 		topLeft = self.calcMass(rawTL, TOP_LEFT)
 		topRight = self.calcMass(rawTR, TOP_RIGHT)
@@ -203,12 +207,12 @@ class Wiiboard:
 		#calibration[0] is calibration values for 0kg
 		#calibration[1] is calibration values for 17kg
 		#calibration[2] is calibration values for 34kg
-		if raw < self.calibration[0][pos]:
+		if raw < int(self.calibration[0][pos], 16):
 			return val
-		elif raw < self.calibration[1][pos]:
-			val = 17 * ((raw - self.calibration[0][pos]) / float((self.calibration[1][pos] - self.calibration[0][pos])))
-		elif raw > self.calibration[1][pos]:
-			val = 17 + 17 * ((raw - self.calibration[1][pos]) / float((self.calibration[2][pos] - self.calibration[1][pos])))
+		elif raw < int(self.calibration[1][pos], 16):
+			val = 17 * ((raw - int(self.calibration[0][pos], 16)) / float((int(self.calibration[1][pos], 16) - int(self.calibration[0][pos], 16))))
+		elif raw > int(self.calibration[1][pos], 16):
+			val = 17 + 17 * ((raw - int(self.calibration[1][pos], 16)) / float((int(self.calibration[2][pos], 16) - int(self.calibration[1][pos], 16))))
 
 		return val
 
@@ -218,51 +222,53 @@ class Wiiboard:
 	def getLED(self):
 		return self.LED
 
-	def parseCalibrationResponse(self, byte):
-		index = 0
-		if len(byte) == 16:
-			for i in range(2):
-				for j in range(4):
-					self.calibration[i][j] = (int(byte[index].hex(), 16) << 8) + int(bytes[index + 1].hex(), 16)
-					index += 2
-		elif len(bytes) < 16:
-			for i in range(4):
-				self.calibration[2][i] = (int(byte[index].hex(), 16) << 8) + int(bytes[index + 1].hex(), 16)
-				index += 2
+	def parseCalibrationResponse(self, data):
+#		index = 0
+#		byte = str(byte.replace("\\x", ""))
+#		if len(byte) == 16:
+#			for i in range(2):
+#				for j in range(4):
+#					self.calibration[i][j] = (int(byte[index], 16) << 8) + int(byte[index + 1], 16)
+#					index += 2
+#		elif len(byte) < 16:
+#			for i in range(4):
+#				self.calibration[2][i] = (int(byte[index], 16) << 8) + int(byte[index + 1], 16)
+#				index += 2
+		length = int(data[4] / 16 + 1)
+		data = data[7:7 + length]
+		cal = lambda d: [d[j:j+2].hex() for j in [0, 2, 4, 6]]
+		if length == 16: # First packet of calibration data
+			self.calibration = [cal(data[0:8]), cal(data[8:16]), [1e4]*4]
+		elif length < 16: # Second packet of calibration data
+			self.calibration[2] = cal(data[0:8])
 
 	# Send <data> to the Wiiboard
-	# <data> should be an array of strings, each string representing a single hex byte
-	def send(self, data):
+	# [!]
+	# Revised send function (from PierrickKoch/wiiboard)
+	# Now instead of storing them in variables you DIRECTLY send them
+	# Read below :)
+	# [1]
+	def send(self, *data):
 		if self.status != "Connected":
 			return
-		data[0] = "52"
-
-		senddata = ""
-		for byte in data:
-			senddata += str(byte)
-
-		self.controlsocket.send(senddata)
-
+		self.controlsocket.send(b'\x52'+b''.join(data))
 	#Turns the power button LED on if light is True, off if False
 	#The board must be connected in order to set the light
 	def setLight(self, light):
 		if light:
-			val = "10"
+			val = b"\x10"
 		else:
-			val = "00"
+			val = b"\x00"
 
-		message = ["00", COMMAND_LIGHT, val]
-		self.send(message)
+		self.send(COMMAND_LIGHT, val)
 		self.LED = light
 
 	def calibrate(self):
-		message = ["00", COMMAND_READ_REGISTER, "04", "A4", "00", "24", "00", "18"]
-		self.send(message)
+		self.send(COMMAND_READ_REGISTER, b"\x04\xA4\x00\x24\x00\x18")
 		self.calibrationRequested = True
 
 	def setReportingType(self):
-		bytearr = ["00", COMMAND_REPORTING, CONTINUOUS_REPORTING, EXTENSION_8BYTES]
-		self.send(bytearr)
+		self.send(COMMAND_REPORTING, CONTINUOUS_REPORTING, EXTENSION_8BYTES)
 
 	def wait(self, millis):
 		time.sleep(millis / 1000.0)
